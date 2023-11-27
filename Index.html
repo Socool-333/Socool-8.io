@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>素因数分解の問題</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .prime-button {
+            margin: 5px;
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            transition-duration: 0.4s;
+            cursor: pointer;
+        }
+        .prime-button:hover {
+            background-color: #45a049;
+        }
+        #question, #result, #score, #timer {
+            text-align: center;
+            margin-top: 20px;
+        }
+        #checkAnswer {
+            font-size: 20px;
+            padding: 10px 24px;
+        }
+      #hiddenCommand {position: absolute; top: 0; right: 0;}
+    </style>
+</head>
+<body>
+    <h1>素因数分解の問題</h1>
+    <div id="game">
+        <p id="question"></p>
+        <div id="primes"></div>
+        <input type="text" id="answer" readonly onkeydown="if(event.key === 'Enter') checkAnswer()">
+        <button id="checkAnswer" onclick="checkAnswer()">答えをチェック</button>
+        <button onclick="undo()">取り消す</button>
+        <button onclick="giveHint()">ヒントを得る</button> <!-- ヒントボタンを追加 -->
+        <p id="result"></p>
+        <p id="score">スコア: 0</p>
+        <input type="number" id="timeSetting" min="10" value="180" onchange="resetGame()">
+        <input type="number" id="timeAddSetting" min="10" value="3" onchange="resetGame()">
+        <select id="difficultySetting" onchange="resetGame()">
+            <option value="19">Easy</option>
+            <option value="43">Normal</option>
+            <option value="71">Hard</option>
+            <option value="97">Super Hard</option>
+            <option value="107">Extreme</option>
+        </select>
+        <button onclick="startGame()">ゲームを開始</button>
+        <button onclick="endGame()">ゲームを終了</button>
+        <p id="timer"></p>
+        <button id="skipButton">問題をスキップ</button>
+    </div>
+    <button onclick="takeScreenshot()">スクリーンショットを撮る</button>
+   <div id="hiddenCommand">
+        <input type="text" id="command">
+        <button onclick="executeCommand()">実行</button>
+    </div>
+    <script>
+        var num;
+        var primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107];
+        var primesDiv = document.getElementById('primes');
+        primes.forEach(function(prime) {
+            var button = document.createElement('button');
+            button.innerHTML = prime;
+            button.className = 'prime-button';
+            button.onclick = function() {
+                document.getElementById('answer').value += (document.getElementById('answer').value ? ' × ' : '') + prime;
+            };
+            primesDiv.appendChild(button);
+        });
+        var score = 0;
+        var time;
+        var timer;
+        var streak = 0;
+        var correctAnswers = 0; 
+        var level = 1; // レベルを追加
+        var timeAddMultiplier = 1; // 乗数の初期化
+        var originalNum; // 元の数値の初期化
+        function generateNumber() {
+            var factors = [];
+            var difficulty = document.getElementById('difficultySetting').value;
+            var minDigits = difficulty === '107' ? 3 : difficulty === '71' ? 2 : 1;
+            var maxDigits = difficulty === '19' ? 3 : difficulty === '43' ? 4 : difficulty === '71' ? 5 : difficulty === '97' ? 6 : 7; 
+            var numDigits = 0;
+            var maxPrime = difficulty === '19' ? 19 : difficulty === '43' ? 37 : difficulty === '71' ? 67 : difficulty === '97' ? 97 : 107; 
+            while(numDigits < minDigits || numDigits > maxDigits) {
+                factors = [];
+                while(factors.reduce((a, b) => a * b, 1) < Math.pow(10, maxDigits)) {
+                    var prime = primes[Math.floor(Math.random() * primes.length)];
+                    if(prime > maxPrime) continue;
+                    if(factors.filter(x => x === prime).length < 2 || prime < 37) {
+                        factors.push(prime);
+                    }
+                }
+                factors.pop();
+                numDigits = factors.reduce((a, b) => a * b, 1).toString().length;
+            }
+            return factors.reduce((a, b) => a * b, 1) * (correctAnswers + 1); 
+        }
+function startGame() {
+    score = 0;
+    streak = 0;
+    correctAnswers = 0;
+    level = 1; // レベルを初期化
+    timeAddMultiplier = 2; // 乗数を初期化
+
+    document.getElementById('score').innerHTML = 'スコア: ' + score;
+
+    num = generateNumber(level);
+    originalNum = num; // 新しい数を保存
+
+    document.getElementById('question').innerHTML = num + 'の素因数分解は何ですか？';
+
+    time = document.getElementById('timeSetting').value;
+    document.getElementById('timer').innerHTML = '制限時間: ' + time + '秒';
+
+    if(timer) {
+        clearInterval(timer);
+    }
+
+    timer = setInterval(function() {
+        time--;
+        document.getElementById('timer').innerHTML = '制限時間: ' + time + '秒';
+        if(time <= 0) {
+            endGame();
+        }
+    }, 1000);
+
+    document.getElementById('difficultySetting').disabled = true;
+    document.getElementById('timeSetting').disabled = true;
+    document.getElementById('timeAddSetting').disabled = true;
+    document.getElementById('skipButton').disabled = false; 
+}
+function endGame() {
+    clearInterval(timer);
+    clearInterval(intervalId);
+    var comment = 'ゲーム終了です。';
+    if (score >= 10000000) {
+        comment = "素晴らしい！あなたのスコアは、ハーバード大学と同等です！";
+    } else if (score >= 3000000) {
+        comment = "すごい！あなたのスコアは、スタンフォード大学と同等です！";
+    } else if (score >= 1500000) {
+        comment = "よくやった！あなたのスコアは、マサチューセッツ工科大学（MIT）と同等です！";
+    } else if (score >= 1000000) {
+        comment = "上出来！あなたのスコアは、カリフォルニア工科大学（Caltech）と同等です！";
+    } else if (score >= 800000) {
+        comment = "なかなかの成績！あなたのスコアは、シカゴ大学と同等です！";
+    } else if (score >= 500000) {
+        comment = "頑張りましたね！あなたのスコアは、プリンストン大学と同等です！";
+    } else if (score >= 300000) {
+        comment = "まだまだ伸びしろがあります！あなたのスコアは、コロンビア大学と同等です！";
+    } else if (score >= 100000) {
+        comment = "これからです！あなたのスコアは、カリフォルニア大学バークレー校と同等です！";
+    } else if (score >= 50000) {
+        comment = "少しずつ進歩しています！あなたのスコアは、イェール大学と同等です！";
+    } else if (score >= 10000) {
+        comment = "初めてとしては悪くありません！あなたのスコアは、ペンシルベニア大学と同等です！";
+    } else if (score >= 5000) {
+        comment = "あなたのスコアは、東京大学と同等です！";
+    } else if (score >= 1000) {
+        comment = "あなたのスコアは、京都大学と同等です！";
+    } else if (score >= 500) {
+        comment = "あなたのスコアは、大阪大学と同等です！";
+    } else if (score >= 100) {
+        comment = "あなたのスコアは、東北大学と同等です！";
+    } else {
+        comment = "暇なんだろ！";
+        var img = document.createElement('img');
+        img.src = 'https://stickershop.line-scdn.net/stickershop/v1/product/1008808/LINEStorePC/main.png;compress=true?__=20161019';
+        document.body.appendChild(img);
+    }
+    document.getElementById('result').innerHTML = comment + ' スコア: ' + score;
+    document.getElementById('difficultySetting').disabled = false;
+    document.getElementById('timeSetting').disabled = false;
+    document.getElementById('timeAddSetting').disabled = false;
+    document.getElementById('timer').innerHTML = '制限時間: 0秒';
+    document.getElementById('skipButton').disabled = true; 
+}
+
+function resetGame() {
+    if(timer) {
+        clearInterval(timer);
+    }
+    document.getElementById('question').innerHTML = '';
+    document.getElementById('answer').value = '';
+    document.getElementById('result').innerHTML = '';
+    document.getElementById('score').innerHTML = 'スコア: 0';
+    document.getElementById('timer').innerHTML = '';
+    document.getElementById('difficultySetting').disabled = false;
+    document.getElementById('timeSetting').disabled = false;
+    document.getElementById('timeAddSetting').disabled = false;
+}
+        function undo() {
+            var answer = document.getElementById('answer').value;
+            var lastPrimeIndex = answer.lastIndexOf(' × ');
+            if (lastPrimeIndex !== -1) {
+                document.getElementById('answer').value = answer.substring(0, lastPrimeIndex);
+            } else {
+                document.getElementById('answer').value = '';
+            }
+        }
+        function primeFactorization(n) {
+            var factors = [];
+            for(var i = 2; i <= n; i++) {
+                while(n % i === 0) {
+                    factors.push(i);
+                    n = n / i;
+                }
+            }
+            return factors.sort((a, b) => a - b).join(' × ');
+        }
+        function checkAnswer() {
+            var userAnswer = document.getElementById('answer').value.split(' × ').sort((a, b) => a - b).join(' × ');
+            var correctAnswer = primeFactorization(num);
+            var difficulty = document.getElementById('difficultySetting').value;
+            var baseScore = difficulty === '19' ? 100 : difficulty === '43' ? 500 : difficulty === '71' ? 1000 : difficulty === '97' ? 5000 : 8000; // 各難易度に対応したスコア
+
+            if(userAnswer === correctAnswer) {
+                document.getElementById('result').innerHTML = '正解です！';
+                if (hintUsed === 0) { // ヒントが使用されていない場合のみ、連続で一発で成功すると2倍ずつ増える
+                    streak++;
+                    score += baseScore * Math.pow(2, streak - 1);
+                } else {
+                    score += baseScore / Math.pow(2, hintUsed); // ヒントを見た回数に応じて得点が半分になる
+                }
+                document.getElementById('score').innerHTML = 'スコア: ' + score;
+                time += Number(document.getElementById('timeAddSetting').value) * timeAddMultiplier; // 一発正解ごとに加えられる秒数が1.5倍になる
+                timeAddMultiplier *= 1.5; // 乗数を1.5倍にする
+                correctAnswers++; 
+                level++; // 正解したときにレベルを上げます
+                num = generateNumber(level);
+                document.getElementById('question').innerHTML = num + 'の素因数分解は何ですか？';
+                document.getElementById('answer').value = '';
+                hintUsed = 0; // ヒント使用回数をリセット
+            } else {
+                var partialNum = userAnswer.split(' × ').reduce((a, b) => a * b, 1);
+                if(Number.isInteger(num / partialNum)) { // numがpartialNumで割り切れるかどうかを確認します
+                    document.getElementById('result').innerHTML = '部分的な回答です。続けてください。';
+                    num = num / partialNum;
+                    document.getElementById('question').innerHTML = num + 'の素因数分解は何ですか？';
+                    document.getElementById('answer').value = '';
+                    streak = 0;
+                } else {
+                    document.getElementById('result').innerHTML = '不正解です。もう一度解答してみてください。';
+                    document.getElementById('answer').value = '';
+                    streak = 0;
+                }
+            }
+        }
+        var hintUsed = 0; // ヒントが使用された回数を保存する変数を追加
+
+        function giveHint() {
+            // 素因数分解のヒントを生成するロジック
+            var factors = primeFactorization(num).split(' × ');
+            document.getElementById('result').innerHTML = 'ヒント: 最大の素因数は ' + Math.max(...factors);
+            hintUsed++; // ヒントが使用された回数を増やす
+        }
+
+        function takeScreenshot() {
+            html2canvas(document.getElementById('game'), {
+                onrendered: function(canvas) {
+                    var a = document.createElement('a');
+                    a.href = canvas.toDataURL("image/jpeg").replace("image/jpeg", "image/octet-stream");
+                    a.download = 'screenshot.jpg';
+                    a.click();
+                }
+            });
+        }
+        document.getElementById('skipButton').onclick = function() {
+            num = generateNumber(level);
+            document.getElementById('question').innerHTML = num + 'の素因数分解は何ですか？';
+            document.getElementById('answer').value = '';
+            document.getElementById('result').innerHTML = '';
+            time -= document.getElementById('timeAddSetting').value;
+            document.getElementById('timer').innerHTML = '制限時間: ' + time + '秒';
+        };
+
+        var intervalId; 
+
+        function executeCommand() {
+            var command = document.getElementById('command').value;
+            if (command === 'CPU') {
+                startGame();
+                var factors = primeFactorization(num).split(' × ');
+                var i = 0;
+                intervalId = setInterval(function() {
+                    document.getElementById('answer').value += (i > 0 ? ' × ' : '') + factors[i];
+                    i++;
+                    if (i === factors.length) {
+                        checkAnswer();
+                        if (time <= 0) {
+                            clearInterval(intervalId);
+                        } else {
+                            factors = primeFactorization(num).split(' × ');
+                            i = 0;
+                        }
+                    }
+                }, 1000);
+            } else if (command === 'Alice') {
+                var img = document.getElementById('aliceImage');
+                if (!img) {
+                    img = document.createElement('img');
+                    img.id = 'aliceImage';
+                    img.style.width = '200px'; // 画像のサイズを小さくします
+                    document.body.appendChild(img);
+                }
+                if (score <= 10000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B91.png';
+                } else if (score <= 50000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B92.png';
+                } else if (score <= 100000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B93.png';
+                } else if (score <= 300000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B93.png';
+                } else if (score <= 500000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B94.png';
+                } else if (score <= 800000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B95.png';
+                } else if (score <= 1000000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B96.png';
+                } else if (score <= 1500000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B96.png';
+                } else if (score <= 3000000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B97.png';
+                } else if (score <= 10000000) {
+                    img.src = 'https://printdora-s3-files.s3-ap-northeast-1.amazonaws.com/3/images/%E3%82%A2%E3%83%AA%E3%82%B98.png';
+                }
+                document.body.appendChild(img);
+            } else if (command.startsWith('Score')) {
+                // Scoreコマンドの後の数字を取得します
+                var newScore = parseInt(command.slice(5));
+                // スコアを設定します
+                score = newScore;
+                document.getElementById('score').innerHTML = 'スコア: ' + score;
+            } else if (command === 'Index') {
+                // num変数をprimeFactorization関数に渡します
+               alert('答えは ' + primeFactorization(num));
+            }
+        }
+    </script>
+</body>
+</html>
